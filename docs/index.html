@@ -1,0 +1,330 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Raid clear tracker</title>
+<script src="https://cdn.jsdelivr.net/npm/luxon@3/build/global/luxon.min.js"></script>
+<script type="module">
+  import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
+
+  const SUPABASE_URL = 'https://rbgehebmevjiwhoupmib.supabase.co';
+  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJiZ2VoZWJtZXZqaXdob3VwbWliIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMxMTM0NDcsImV4cCI6MjA5ODY4OTQ0N30.BRP1hyhLlL-7B59g-ODyeOQ2Xtq2TTtI0PJg6ZXQeBE';
+
+  // Keep in sync with src/raidMapping.js on the backend.
+  const TRACKED_RAIDS = ['Serca', 'Horizon Cathedral', 'Kazeros', 'Mochi'];
+  const VISIBLE_ROWS = 6;
+
+  const RESET_ZONE = 'America/New_York';
+  const RESET_WEEKDAY = 3;
+  const RESET_HOUR = 3;
+
+  function getCurrentWeekStart() {
+    const { DateTime } = luxon;
+    const nowInZone = DateTime.now().setZone(RESET_ZONE);
+    const daysSinceReset = (nowInZone.weekday - RESET_WEEKDAY + 7) % 7;
+    let boundary = nowInZone
+      .minus({ days: daysSinceReset })
+      .set({ hour: RESET_HOUR, minute: 0, second: 0, millisecond: 0 });
+    if (boundary > nowInZone) boundary = boundary.minus({ weeks: 1 });
+    return boundary;
+  }
+
+  window.handleIconError = function (img) {
+    if (img.dataset.fallbackSrc) {
+      img.src = img.dataset.fallbackSrc;
+      delete img.dataset.fallbackSrc;
+      return;
+    }
+    const span = document.createElement('span');
+    span.className = 'avatar avatar-fallback';
+    span.textContent = img.dataset.fallbackText || '??';
+    img.replaceWith(span);
+  };
+
+  function classIconHtml(className) {
+    if (!className) {
+      return '<span class="avatar avatar-fallback">??</span>';
+    }
+    const safeName = className.replace(/[^a-zA-Z0-9_ -]/g, '');
+    const fallback = safeName.slice(0, 2);
+    return `<img class="avatar avatar-icon" src="assets/classes/${safeName}.svg" data-fallback-src="assets/classes/${safeName}.png" data-fallback-text="${fallback}" alt="${safeName}" onerror="handleIconError(this)" />`;
+  }
+
+  function renderDashboard({ byPerson, clearsByCharId }) {
+    const root = document.getElementById('root');
+    root.innerHTML = '';
+
+    if (byPerson.size === 0) {
+      root.innerHTML = '<p class="muted">No resolved characters yet.</p>';
+      return;
+    }
+
+    for (const [personName, chars] of byPerson) {
+      const rosterEl = document.createElement('div');
+      rosterEl.className = 'roster';
+
+      const headerEl = document.createElement('div');
+      headerEl.className = 'roster-header';
+      headerEl.innerHTML = `<span>${personName}'s roster</span><span class="muted">(${chars.length} chars)</span>`;
+      rosterEl.appendChild(headerEl);
+
+      const bodyEl = document.createElement('div');
+      bodyEl.className = 'roster-body';
+
+      for (const char of chars) {
+        const raidsCleared = clearsByCharId.get(char.id) || new Set();
+
+        const rowEl = document.createElement('div');
+        rowEl.className = 'char-row';
+
+        const nameEl = document.createElement('div');
+        nameEl.className = 'char-name';
+        nameEl.innerHTML = `
+          ${classIconHtml(char.class_name)}
+          <span class="name">${char.char_name}</span>
+          <span class="ilvl">${char.item_level != null ? char.item_level.toFixed(2) : '?'}</span>
+          <span class="region">NA</span>
+          <span class="muted">${char.class_name || 'unknown class'}</span>
+          <span class="muted">${raidsCleared.size}/${TRACKED_RAIDS.length} cleared</span>
+        `;
+        rowEl.appendChild(nameEl);
+
+        const badgesEl = document.createElement('div');
+        badgesEl.className = 'badges';
+        for (const raidName of TRACKED_RAIDS) {
+          const badge = document.createElement('span');
+          badge.className = raidsCleared.has(raidName) ? 'badge badge-done' : 'badge badge-todo';
+          badge.textContent = raidName;
+          badgesEl.appendChild(badge);
+        }
+        rowEl.appendChild(badgesEl);
+
+        bodyEl.appendChild(rowEl);
+      }
+
+      rosterEl.appendChild(bodyEl);
+      root.appendChild(rosterEl);
+
+      if (chars.length > VISIBLE_ROWS) {
+        const rows = bodyEl.querySelectorAll('.char-row');
+        const cutoffRow = rows[VISIBLE_ROWS - 1];
+        bodyEl.style.maxHeight = `${cutoffRow.offsetTop + cutoffRow.offsetHeight}px`;
+        bodyEl.style.overflowY = 'auto';
+      }
+    }
+  }
+
+  async function main() {
+    const root = document.getElementById('root');
+
+    if (SUPABASE_ANON_KEY.startsWith('PASTE_')) {
+      root.innerHTML = '<p class="error">Set SUPABASE_ANON_KEY in index.html before loading this page.</p>';
+      return;
+    }
+
+    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    const weekStart = getCurrentWeekStart();
+    const weekStartDate = weekStart.toISODate();
+
+    document.getElementById('week-label').textContent = `week of ${weekStartDate}`;
+
+    const [{ data: characters, error: charErr }, { data: clears, error: clearErr }] = await Promise.all([
+      supabase.from('characters').select('id, person_name, char_name, class_name, item_level').eq('resolve_status', 'ok'),
+      supabase.from('clears').select('character_id, raid_name').eq('week_start', weekStartDate),
+    ]);
+
+    if (charErr || clearErr) {
+      root.innerHTML = `<p class="error">Failed to load data: ${(charErr || clearErr).message}</p>`;
+      return;
+    }
+
+    const clearsByCharId = new Map();
+    for (const clear of clears) {
+      if (!clearsByCharId.has(clear.character_id)) clearsByCharId.set(clear.character_id, new Set());
+      clearsByCharId.get(clear.character_id).add(clear.raid_name);
+    }
+
+    const byPerson = new Map();
+    for (const char of characters) {
+      if (!byPerson.has(char.person_name)) byPerson.set(char.person_name, []);
+      byPerson.get(char.person_name).push(char);
+    }
+    for (const chars of byPerson.values()) {
+      chars.sort((a, b) => (b.item_level ?? 0) - (a.item_level ?? 0));
+    }
+
+    renderDashboard({ byPerson, clearsByCharId });
+  }
+
+  main();
+</script>
+<style>
+  :root {
+    color-scheme: dark;
+  }
+  body {
+    margin: 0;
+    background: #0d0d0f;
+    color: #e8e8ea;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+  .container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 2rem 1.25rem;
+  }
+  .page-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 1.5rem;
+  }
+  .page-header h1 {
+    font-size: 18px;
+    font-weight: 500;
+    margin: 0;
+  }
+  .page-header-controls {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  .admin-link {
+    color: #7fb2e8;
+    font-size: 13px;
+    text-decoration: none;
+  }
+  .admin-link:hover {
+    text-decoration: underline;
+  }
+  .muted {
+    color: #8a8a8f;
+    font-size: 13px;
+  }
+  .error {
+    color: #e07a7a;
+  }
+  #root {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1rem;
+    align-items: start;
+  }
+  @media (max-width: 1100px) {
+    #root {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+  @media (max-width: 700px) {
+    #root {
+      grid-template-columns: 1fr;
+    }
+  }
+  .roster {
+    border: 0.5px solid #2a2a2e;
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .roster-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 16px;
+    background: #17171a;
+    border-bottom: 0.5px solid #2a2a2e;
+    font-weight: 500;
+    font-size: 14px;
+  }
+  .roster-body {
+    scrollbar-width: thin;
+  }
+  .char-row {
+    padding: 14px 16px;
+    border-bottom: 0.5px solid #2a2a2e;
+  }
+  .char-row:last-child {
+    border-bottom: none;
+  }
+  .char-name {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+    font-size: 14px;
+  }
+  .char-name .name {
+    font-weight: 500;
+  }
+  .ilvl {
+    font-size: 13px;
+    color: #d8a34a;
+  }
+  .avatar {
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    flex-shrink: 0;
+  }
+  .avatar-icon {
+    object-fit: contain;
+    background: #1e2a3a;
+    padding: 3px;
+  }
+  .avatar-fallback {
+    background: #1e2a3a;
+    color: #7fb2e8;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px;
+    font-weight: 500;
+  }
+  .region {
+    font-size: 12px;
+    color: #8a8a8f;
+    border: 0.5px solid #2a2a2e;
+    border-radius: 4px;
+    padding: 1px 6px;
+  }
+  .badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .badge {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    border: 0.5px solid #2a2a2e;
+    border-radius: 8px;
+    padding: 6px 10px;
+    font-size: 13px;
+  }
+  .badge-done::before {
+    content: '\2713';
+    color: #5dcaa5;
+  }
+  .badge-todo {
+    opacity: 0.5;
+  }
+  .badge-todo::before {
+    content: '\2715';
+    color: #8a8a8f;
+  }
+</style>
+</head>
+<body>
+  <div class="container">
+    <div class="page-header">
+      <h1>Raid clear tracker</h1>
+      <div class="page-header-controls">
+        <a class="admin-link" href="admin.html">Admin</a>
+        <span id="week-label" class="muted"></span>
+      </div>
+    </div>
+
+    <div id="root"><p class="muted">Loading...</p></div>
+  </div>
+</body>
+</html>

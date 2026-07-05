@@ -1,0 +1,21 @@
+node_modules/
+.env
+roster.json
+scrape.log
+
+# Only docs/ (the static dashboard) is meant to be public via GitHub Pages —
+# the admin backend, resolver/scraper source, and local config stay local.
+# docs/index.html is the canonical copy; this root one is the local working
+# copy kept in sync with it manually before each deploy.
+/index.html
+/admin.html
+/server.js
+/src/
+/package.json
+/package-lock.json
+/roster.example.json
+/run-scrape.bat
+/.env.example
+/.claude/
+/New Text Document.txt
+/assets/
