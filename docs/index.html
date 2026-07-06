@@ -54,9 +54,11 @@
   let cachedData = null;
   let hideThreeOfFour = true;
   let searchTerm = '';
+  const minimizedPeople = new Set();
 
   const EYE_SVG = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
   const EYE_OFF_SVG = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a21.8 21.8 0 0 1 5.06-6.06M9.9 4.24A10.94 10.94 0 0 1 12 4c7 0 11 8 11 8a21.79 21.79 0 0 1-3.22 4.55M1 1l22 22"/><path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/></svg>';
+  const CHEVRON_SVG = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>';
 
   function buildCharRow(char, raidsCleared) {
     const rowEl = document.createElement('div');
@@ -109,10 +111,36 @@
       if (hiddenCount > 0) countsText += `, ${hiddenCount} hidden`;
       if (completeCount > 0) countsText += `, ${completeCount} complete`;
     }
+    const isMinimized = showHiddenCount && minimizedPeople.has(personName);
+
     const headerEl = document.createElement('div');
     headerEl.className = 'roster-header';
-    headerEl.innerHTML = `<span>${personName}'s roster</span><span class="muted">(${countsText})</span>`;
+    headerEl.innerHTML = `
+      <div class="roster-header-text">
+        <span>${personName}'s roster</span>
+        <span class="muted">(${countsText})</span>
+      </div>
+    `;
+
+    if (showHiddenCount) {
+      const minimizeBtn = document.createElement('button');
+      minimizeBtn.className = 'minimize-btn' + (isMinimized ? ' collapsed' : '');
+      const label = isMinimized ? 'Expand roster' : 'Minimize roster';
+      minimizeBtn.title = label;
+      minimizeBtn.setAttribute('aria-label', label);
+      minimizeBtn.innerHTML = CHEVRON_SVG;
+      minimizeBtn.addEventListener('click', () => {
+        if (minimizedPeople.has(personName)) minimizedPeople.delete(personName);
+        else minimizedPeople.add(personName);
+        renderDashboard();
+      });
+      headerEl.appendChild(minimizeBtn);
+    }
+
     rosterEl.appendChild(headerEl);
+    root.appendChild(rosterEl);
+
+    if (isMinimized) return;
 
     const bodyEl = document.createElement('div');
     bodyEl.className = 'roster-body';
@@ -123,7 +151,6 @@
     }
 
     rosterEl.appendChild(bodyEl);
-    root.appendChild(rosterEl);
 
     if (visibleChars.length > VISIBLE_ROWS) {
       const rows = bodyEl.querySelectorAll('.char-row');
@@ -311,35 +338,64 @@
     color: #e07a7a;
   }
   #root {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 1rem;
-    align-items: start;
+    column-count: 3;
+    column-gap: 1rem;
   }
   @media (max-width: 1100px) {
     #root {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
+      column-count: 2;
     }
   }
   @media (max-width: 700px) {
     #root {
-      grid-template-columns: 1fr;
+      column-count: 1;
     }
   }
   .roster {
     border: 0.5px solid #2a2a2e;
     border-radius: 12px;
     overflow: hidden;
+    break-inside: avoid;
+    margin-bottom: 1rem;
   }
   .roster-header {
     display: flex;
     align-items: center;
+    justify-content: space-between;
     gap: 8px;
     padding: 12px 16px;
     background: #17171a;
     border-bottom: 0.5px solid #2a2a2e;
     font-weight: 500;
     font-size: 14px;
+  }
+  .roster-header-text {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+  }
+  .minimize-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    color: #8a8a8f;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 6px;
+    flex-shrink: 0;
+  }
+  .minimize-btn:hover {
+    background: #1e1e22;
+    color: #c9c9cf;
+  }
+  .minimize-btn svg {
+    transition: transform 0.15s ease;
+  }
+  .minimize-btn.collapsed svg {
+    transform: rotate(-90deg);
   }
   .roster-body {
     scrollbar-width: thin;
