@@ -51,8 +51,79 @@
     return `<img class="avatar avatar-icon" src="assets/classes/${safeName}.svg" data-fallback-src="assets/classes/${safeName}.png" data-fallback-text="${fallback}" alt="${safeName}" onerror="handleIconError(this)" />`;
   }
 
-  function renderDashboard({ byPerson, clearsByCharId }) {
+  let cachedData = null;
+  let hideThreeOfFour = true;
+  let searchTerm = '';
+
+  function buildCharRow(char, raidsCleared) {
+    const rowEl = document.createElement('div');
+    rowEl.className = 'char-row';
+
+    const nameEl = document.createElement('div');
+    nameEl.className = 'char-name';
+    nameEl.innerHTML = `
+      ${classIconHtml(char.class_name)}
+      <span class="name">${char.char_name}</span>
+      <span class="ilvl">${char.item_level != null ? char.item_level.toFixed(2) : '?'}</span>
+      <span class="region">NA</span>
+      <span class="muted">${char.class_name || 'unknown class'}</span>
+      <span class="muted">${raidsCleared.size}/${TRACKED_RAIDS.length} cleared</span>
+    `;
+    rowEl.appendChild(nameEl);
+
+    const badgesEl = document.createElement('div');
+    badgesEl.className = 'badges';
+    for (const raidName of TRACKED_RAIDS) {
+      const badge = document.createElement('span');
+      badge.className = raidsCleared.has(raidName) ? 'badge badge-done' : 'badge badge-todo';
+      badge.textContent = raidName;
+      badgesEl.appendChild(badge);
+    }
+    rowEl.appendChild(badgesEl);
+
+    return rowEl;
+  }
+
+  function isCompletionHidden(raidsCleared) {
+    if (raidsCleared.size === TRACKED_RAIDS.length) return true; // 4/4 — always hidden
+    if (raidsCleared.size === TRACKED_RAIDS.length - 1 && hideThreeOfFour) return true; // 3/4 — toggle-controlled
+    return false;
+  }
+
+  function renderRosterCard(root, personName, chars, visibleChars, clearsByCharId, { showHiddenCount }) {
+    const rosterEl = document.createElement('div');
+    rosterEl.className = 'roster';
+
+    const hiddenCount = chars.length - visibleChars.length;
+    const headerEl = document.createElement('div');
+    headerEl.className = 'roster-header';
+    headerEl.innerHTML = `<span>${personName}'s roster</span><span class="muted">(${chars.length} chars${showHiddenCount && hiddenCount > 0 ? `, ${hiddenCount} hidden` : ''})</span>`;
+    rosterEl.appendChild(headerEl);
+
+    const bodyEl = document.createElement('div');
+    bodyEl.className = 'roster-body';
+
+    for (const char of visibleChars) {
+      const raidsCleared = clearsByCharId.get(char.id) || new Set();
+      bodyEl.appendChild(buildCharRow(char, raidsCleared));
+    }
+
+    rosterEl.appendChild(bodyEl);
+    root.appendChild(rosterEl);
+
+    if (visibleChars.length > VISIBLE_ROWS) {
+      const rows = bodyEl.querySelectorAll('.char-row');
+      const cutoffRow = rows[VISIBLE_ROWS - 1];
+      bodyEl.style.maxHeight = `${cutoffRow.offsetTop + cutoffRow.offsetHeight}px`;
+      bodyEl.style.overflowY = 'auto';
+    }
+  }
+
+  function renderDashboard() {
     const root = document.getElementById('root');
+    if (!cachedData) return;
+    const { byPerson, clearsByCharId } = cachedData;
+
     root.innerHTML = '';
 
     if (byPerson.size === 0) {
@@ -60,58 +131,30 @@
       return;
     }
 
+    const term = searchTerm.trim().toLowerCase();
+    let renderedAnything = false;
+
     for (const [personName, chars] of byPerson) {
-      const rosterEl = document.createElement('div');
-      rosterEl.className = 'roster';
+      const personMatches = !term || personName.toLowerCase().includes(term);
 
-      const headerEl = document.createElement('div');
-      headerEl.className = 'roster-header';
-      headerEl.innerHTML = `<span>${personName}'s roster</span><span class="muted">(${chars.length} chars)</span>`;
-      rosterEl.appendChild(headerEl);
-
-      const bodyEl = document.createElement('div');
-      bodyEl.className = 'roster-body';
-
-      for (const char of chars) {
-        const raidsCleared = clearsByCharId.get(char.id) || new Set();
-
-        const rowEl = document.createElement('div');
-        rowEl.className = 'char-row';
-
-        const nameEl = document.createElement('div');
-        nameEl.className = 'char-name';
-        nameEl.innerHTML = `
-          ${classIconHtml(char.class_name)}
-          <span class="name">${char.char_name}</span>
-          <span class="ilvl">${char.item_level != null ? char.item_level.toFixed(2) : '?'}</span>
-          <span class="region">NA</span>
-          <span class="muted">${char.class_name || 'unknown class'}</span>
-          <span class="muted">${raidsCleared.size}/${TRACKED_RAIDS.length} cleared</span>
-        `;
-        rowEl.appendChild(nameEl);
-
-        const badgesEl = document.createElement('div');
-        badgesEl.className = 'badges';
-        for (const raidName of TRACKED_RAIDS) {
-          const badge = document.createElement('span');
-          badge.className = raidsCleared.has(raidName) ? 'badge badge-done' : 'badge badge-todo';
-          badge.textContent = raidName;
-          badgesEl.appendChild(badge);
-        }
-        rowEl.appendChild(badgesEl);
-
-        bodyEl.appendChild(rowEl);
+      if (personMatches) {
+        const visibleChars = chars.filter((char) => !isCompletionHidden(clearsByCharId.get(char.id) || new Set()));
+        renderedAnything = true;
+        renderRosterCard(root, personName, chars, visibleChars, clearsByCharId, { showHiddenCount: true });
+        continue;
       }
 
-      rosterEl.appendChild(bodyEl);
-      root.appendChild(rosterEl);
+      // Person name didn't match — fall back to matching individual character names.
+      // Explicit character search always shows the result, ignoring the completion toggle.
+      const matchingChars = chars.filter((char) => char.char_name.toLowerCase().includes(term));
+      if (matchingChars.length === 0) continue;
 
-      if (chars.length > VISIBLE_ROWS) {
-        const rows = bodyEl.querySelectorAll('.char-row');
-        const cutoffRow = rows[VISIBLE_ROWS - 1];
-        bodyEl.style.maxHeight = `${cutoffRow.offsetTop + cutoffRow.offsetHeight}px`;
-        bodyEl.style.overflowY = 'auto';
-      }
+      renderedAnything = true;
+      renderRosterCard(root, personName, matchingChars, matchingChars, clearsByCharId, { showHiddenCount: false });
+    }
+
+    if (!renderedAnything) {
+      root.innerHTML = '<p class="muted">No matches.</p>';
     }
   }
 
@@ -154,10 +197,33 @@
       chars.sort((a, b) => (b.item_level ?? 0) - (a.item_level ?? 0));
     }
 
-    renderDashboard({ byPerson, clearsByCharId });
+    cachedData = { byPerson, clearsByCharId };
+    renderDashboard();
+  }
+
+  function setupControls() {
+    const toggleBtn = document.getElementById('hide-toggle');
+    const searchInput = document.getElementById('search-input');
+
+    function updateToggleLabel() {
+      toggleBtn.textContent = hideThreeOfFour ? 'Show 3/4 cleared' : 'Hide 3/4 cleared';
+    }
+
+    updateToggleLabel();
+    toggleBtn.addEventListener('click', () => {
+      hideThreeOfFour = !hideThreeOfFour;
+      updateToggleLabel();
+      renderDashboard();
+    });
+
+    searchInput.addEventListener('input', () => {
+      searchTerm = searchInput.value;
+      renderDashboard();
+    });
   }
 
   main();
+  setupControls();
 </script>
 <style>
   :root {
@@ -189,6 +255,33 @@
     display: flex;
     align-items: center;
     gap: 16px;
+  }
+  .toolbar {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 1.25rem;
+  }
+  #search-input {
+    flex: 1;
+    background: #17171a;
+    border: 0.5px solid #2a2a2e;
+    border-radius: 8px;
+    color: #e8e8ea;
+    padding: 8px 12px;
+    font-size: 14px;
+  }
+  .toggle-btn {
+    background: #17171a;
+    color: #c9c9cf;
+    border: 0.5px solid #2a2a2e;
+    border-radius: 8px;
+    padding: 8px 14px;
+    font-size: 13px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .toggle-btn:hover {
+    background: #1e1e22;
   }
   .muted {
     color: #8a8a8f;
@@ -313,6 +406,11 @@
       <div class="page-header-controls">
         <span id="week-label" class="muted"></span>
       </div>
+    </div>
+
+    <div class="toolbar">
+      <input id="search-input" type="text" placeholder="Search a roster or character..." />
+      <button id="hide-toggle" class="toggle-btn"></button>
     </div>
 
     <div id="root"><p class="muted">Loading...</p></div>
