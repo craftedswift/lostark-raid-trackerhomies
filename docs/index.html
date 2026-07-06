@@ -13,6 +13,10 @@
 
   // Keep in sync with src/raidMapping.js on the backend.
   const TRACKED_RAIDS = ['Serca', 'Horizon Cathedral', 'Kazeros', 'Mochi'];
+  // The 3 current raids that still award weekly gold. Mochi is older content
+  // people sometimes clear to help newer players without taking gold, so it
+  // shouldn't count toward "done for the week" on its own.
+  const GOLD_RAIDS = ['Serca', 'Horizon Cathedral', 'Kazeros'];
   const VISIBLE_ROWS = 6;
 
   const RESET_ZONE = 'America/New_York';
@@ -89,9 +93,17 @@
     return rowEl;
   }
 
+  function isFullyComplete(raidsCleared) {
+    return TRACKED_RAIDS.every((raidName) => raidsCleared.has(raidName));
+  }
+
+  function hasFinishedGoldRaids(raidsCleared) {
+    return GOLD_RAIDS.every((raidName) => raidsCleared.has(raidName));
+  }
+
   function isCompletionHidden(raidsCleared) {
-    if (raidsCleared.size === TRACKED_RAIDS.length) return true; // 4/4 — always hidden
-    if (raidsCleared.size === TRACKED_RAIDS.length - 1 && hideThreeOfFour) return true; // 3/4 — toggle-controlled
+    if (isFullyComplete(raidsCleared)) return true; // all 4 raids — always hidden
+    if (hasFinishedGoldRaids(raidsCleared) && hideThreeOfFour) return true; // gold raids done, Mochi optional — toggle-controlled
     return false;
   }
 
@@ -105,8 +117,8 @@
       let completeCount = 0;
       for (const char of chars) {
         const raidsCleared = clearsByCharId.get(char.id) || new Set();
-        if (raidsCleared.size === TRACKED_RAIDS.length) completeCount++;
-        else if (raidsCleared.size === TRACKED_RAIDS.length - 1 && hideThreeOfFour) hiddenCount++;
+        if (isFullyComplete(raidsCleared)) completeCount++;
+        else if (hasFinishedGoldRaids(raidsCleared) && hideThreeOfFour) hiddenCount++;
       }
       if (hiddenCount > 0) countsText += `, ${hiddenCount} hidden`;
       if (completeCount > 0) countsText += `, ${completeCount} complete`;
