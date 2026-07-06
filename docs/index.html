@@ -155,7 +155,8 @@
     if (visibleChars.length > VISIBLE_ROWS) {
       const rows = bodyEl.querySelectorAll('.char-row');
       const cutoffRow = rows[VISIBLE_ROWS - 1];
-      bodyEl.style.maxHeight = `${cutoffRow.offsetTop + cutoffRow.offsetHeight}px`;
+      const visibleHeight = cutoffRow.offsetTop - rows[0].offsetTop + cutoffRow.offsetHeight;
+      bodyEl.style.maxHeight = `${visibleHeight}px`;
       bodyEl.style.overflowY = 'auto';
     }
   }
