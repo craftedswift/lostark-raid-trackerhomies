@@ -90,6 +90,7 @@
   let cachedData = null;
   let hideThreeOfFour = true;
   let searchTerm = '';
+  let raidFilter = null; // { raidName, mode: 'needs' | 'has' } or null
   const minimizedPeople = new Set();
 
   const FAVORITES_KEY = 'lostark-tracker-favorites';
@@ -264,12 +265,35 @@
       return;
     }
 
-    const term = searchTerm.trim().toLowerCase();
-    let renderedAnything = false;
-
     const personEntries = [...byPerson].sort(
       (a, b) => Number(favoritePeople.has(b[0])) - Number(favoritePeople.has(a[0]))
     );
+
+    if (raidFilter) {
+      const { raidName, mode } = raidFilter;
+      let renderedAnyone = false;
+
+      for (const [personName, chars] of personEntries) {
+        const matchingChars = chars.filter((char) => {
+          const cleared = clearsByCharId.get(char.id) || new Set();
+          const hasRaid = cleared.has(raidName);
+          return mode === 'needs' ? !hasRaid : hasRaid;
+        });
+        if (matchingChars.length === 0) continue;
+
+        renderedAnyone = true;
+        renderRosterCard(root, personName, matchingChars, matchingChars, clearsByCharId, { showHiddenCount: false });
+      }
+
+      if (!renderedAnyone) {
+        const verb = mode === 'needs' ? 'needs' : 'has cleared';
+        root.innerHTML = `<p class="muted">Nobody ${verb} ${raidName} right now.</p>`;
+      }
+      return;
+    }
+
+    const term = searchTerm.trim().toLowerCase();
+    let renderedAnything = false;
 
     for (const [personName, chars] of personEntries) {
       const personMatches = !term || personName.toLowerCase().includes(term);
@@ -341,6 +365,7 @@
   function setupControls() {
     const toggleBtn = document.getElementById('hide-toggle');
     const searchInput = document.getElementById('search-input');
+    const raidFilterBar = document.getElementById('raid-filter-bar');
 
     function updateToggleLabel() {
       const label = hideThreeOfFour ? 'Show 3/4 cleared characters' : 'Hide 3/4 cleared characters';
@@ -349,7 +374,39 @@
       toggleBtn.setAttribute('aria-label', label);
     }
 
+    function renderRaidChips() {
+      raidFilterBar.innerHTML = '';
+      for (const raidName of TRACKED_RAIDS) {
+        const chip = document.createElement('button');
+        chip.className = 'raid-chip';
+        chip.textContent = raidName;
+
+        if (raidFilter && raidFilter.raidName === raidName) {
+          chip.classList.add(raidFilter.mode === 'needs' ? 'mode-needs' : 'mode-has');
+          chip.title = raidFilter.mode === 'needs' ? `Showing who needs ${raidName} — click to show who has it` : `Showing who has ${raidName} — click to clear`;
+        } else {
+          chip.title = `Click to show who still needs ${raidName}`;
+        }
+
+        chip.addEventListener('click', () => {
+          if (raidFilter && raidFilter.raidName === raidName) {
+            raidFilter = raidFilter.mode === 'needs' ? { raidName, mode: 'has' } : null;
+          } else {
+            raidFilter = { raidName, mode: 'needs' };
+          }
+          searchTerm = '';
+          searchInput.value = '';
+          renderRaidChips();
+          renderDashboard();
+        });
+
+        raidFilterBar.appendChild(chip);
+      }
+    }
+
     updateToggleLabel();
+    renderRaidChips();
+
     toggleBtn.addEventListener('click', () => {
       hideThreeOfFour = !hideThreeOfFour;
       updateToggleLabel();
@@ -358,6 +415,10 @@
 
     searchInput.addEventListener('input', () => {
       searchTerm = searchInput.value;
+      if (searchTerm.trim() && raidFilter) {
+        raidFilter = null;
+        renderRaidChips();
+      }
       renderDashboard();
     });
   }
@@ -428,7 +489,35 @@
   .toolbar {
     display: flex;
     gap: 12px;
+    margin-bottom: 0.75rem;
+  }
+  .raid-filter-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
     margin-bottom: 1.25rem;
+  }
+  .raid-chip {
+    background: #17171a;
+    color: #c9c9cf;
+    border: 0.5px solid #2a2a2e;
+    border-radius: 999px;
+    padding: 6px 14px;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .raid-chip:hover {
+    background: #1e1e22;
+  }
+  .raid-chip.mode-needs {
+    background: rgba(224, 122, 122, 0.15);
+    border-color: rgba(224, 122, 122, 0.5);
+    color: #e07a7a;
+  }
+  .raid-chip.mode-has {
+    background: rgba(93, 202, 165, 0.15);
+    border-color: rgba(93, 202, 165, 0.5);
+    color: #5dcaa5;
   }
   #search-input {
     flex: 1;
@@ -631,6 +720,8 @@
       <input id="search-input" type="text" placeholder="Search a roster or character..." />
       <button id="hide-toggle" class="toggle-btn"></button>
     </div>
+
+    <div id="raid-filter-bar" class="raid-filter-bar"></div>
 
     <div id="root"><p class="muted">Loading...</p></div>
   </div>
