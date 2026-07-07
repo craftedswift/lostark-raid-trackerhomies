@@ -22,6 +22,38 @@
   const GOLD_RAIDS = ['Serca', 'Horizon Cathedral', 'Kazeros'];
   const VISIBLE_ROWS = 6;
 
+  // Item level gates per difficulty, highest first so the first match wins.
+  // Update these if a balance patch shifts the requirements.
+  const RAID_DIFFICULTY_TIERS = {
+    Serca: [
+      { name: 'Nightmare', itemLevel: 1740 },
+      { name: 'Hard', itemLevel: 1730 },
+      { name: 'Normal', itemLevel: 1710 },
+    ],
+    'Horizon Cathedral': [
+      { name: 'Level 3', itemLevel: 1750 },
+      { name: 'Level 2', itemLevel: 1720 },
+      { name: 'Level 1', itemLevel: 1700 },
+    ],
+    Kazeros: [
+      { name: 'Hard', itemLevel: 1730 },
+      { name: 'Normal', itemLevel: 1710 },
+    ],
+    Mochi: [
+      { name: 'Hard', itemLevel: 1720 },
+      { name: 'Normal', itemLevel: 1700 },
+    ],
+  };
+
+  function getEligibleDifficulty(raidName, itemLevel) {
+    const tiers = RAID_DIFFICULTY_TIERS[raidName];
+    if (!tiers || itemLevel == null) return null;
+    for (const tier of tiers) {
+      if (itemLevel >= tier.itemLevel) return tier.name;
+    }
+    return null;
+  }
+
   // Raid splash art, sourced the same way as the class icons — rotates on
   // every load so the backdrop isn't the same raid every time. Echidna is a
   // low-res official promo image (not full-bleed splash art like the rest),
@@ -253,7 +285,7 @@
     }
   }
 
-  function renderRaidSummary(raidName, mode, names) {
+  function renderRaidSummary(raidName, mode, chars) {
     const box = document.getElementById('raid-summary');
 
     if (!raidName) {
@@ -264,18 +296,60 @@
 
     box.classList.add('visible');
 
-    if (names.length === 0) {
+    if (chars.length === 0) {
       const verb = mode === 'needs' ? 'needs' : 'has cleared';
       box.innerHTML = `<span class="muted">Nobody ${verb} ${raidName} right now.</span>`;
       return;
     }
 
-    const verb = mode === 'needs' ? 'still need' : 'have cleared';
-    const chips = names.map((name) => `<span class="raid-summary-chip">${name}</span>`).join('');
-    box.innerHTML = `
-      <span class="raid-summary-label">${names.length} ${names.length === 1 ? 'character' : 'characters'} ${verb} ${raidName}:</span>
-      <div class="raid-summary-names">${chips}</div>
-    `;
+    if (mode === 'has') {
+      const chips = chars.map((char) => `<span class="raid-summary-chip">${char.char_name}</span>`).join('');
+      box.innerHTML = `
+        <span class="raid-summary-label">${chars.length} ${chars.length === 1 ? 'character has' : 'characters have'} cleared ${raidName}:</span>
+        <div class="raid-summary-names">${chips}</div>
+      `;
+      return;
+    }
+
+    // mode === 'needs' — group by the difficulty each character's item level
+    // currently qualifies them for, so it's clear who can actually run what.
+    const tiers = RAID_DIFFICULTY_TIERS[raidName] || [];
+    const groups = new Map(); // tier name -> chars[]
+    const notEligible = [];
+
+    for (const char of chars) {
+      const tier = getEligibleDifficulty(raidName, char.item_level);
+      if (!tier) {
+        notEligible.push(char);
+        continue;
+      }
+      if (!groups.has(tier)) groups.set(tier, []);
+      groups.get(tier).push(char);
+    }
+
+    let html = `<span class="raid-summary-label">${chars.length} ${chars.length === 1 ? 'character needs' : 'characters need'} ${raidName}:</span>`;
+
+    for (const tier of tiers) {
+      const group = groups.get(tier.name);
+      if (!group || group.length === 0) continue;
+      html += `
+        <div class="raid-summary-group">
+          <span class="raid-summary-tier">${tier.name}-eligible (${group.length}):</span>
+          <div class="raid-summary-names">${group.map((c) => `<span class="raid-summary-chip">${c.char_name}</span>`).join('')}</div>
+        </div>
+      `;
+    }
+
+    if (notEligible.length > 0) {
+      html += `
+        <div class="raid-summary-group">
+          <span class="raid-summary-tier">Not yet eligible (${notEligible.length}):</span>
+          <div class="raid-summary-names">${notEligible.map((c) => `<span class="raid-summary-chip">${c.char_name}</span>`).join('')}</div>
+        </div>
+      `;
+    }
+
+    box.innerHTML = html;
   }
 
   function renderDashboard() {
@@ -297,7 +371,7 @@
     if (raidFilter) {
       const { raidName, mode } = raidFilter;
       let renderedAnyone = false;
-      const summaryNames = [];
+      const summaryChars = [];
 
       for (const [personName, chars] of personEntries) {
         const matchingChars = chars.filter((char) => {
@@ -308,11 +382,11 @@
         if (matchingChars.length === 0) continue;
 
         renderedAnyone = true;
-        for (const char of matchingChars) summaryNames.push(char.char_name);
+        summaryChars.push(...matchingChars);
         renderRosterCard(root, personName, matchingChars, matchingChars, clearsByCharId, { showHiddenCount: false });
       }
 
-      renderRaidSummary(raidName, mode, summaryNames);
+      renderRaidSummary(raidName, mode, summaryChars);
 
       if (!renderedAnyone) {
         const verb = mode === 'needs' ? 'needs' : 'has cleared';
@@ -549,6 +623,18 @@
     display: flex;
     flex-wrap: wrap;
     gap: 6px;
+  }
+  .raid-summary-group {
+    margin-top: 10px;
+  }
+  .raid-summary-label + .raid-summary-group {
+    margin-top: 0;
+  }
+  .raid-summary-tier {
+    display: block;
+    font-size: 12px;
+    color: #d8a34a;
+    margin-bottom: 6px;
   }
   .raid-summary-chip {
     background: #1e1e22;
