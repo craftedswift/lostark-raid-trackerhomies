@@ -285,6 +285,28 @@
     }
   }
 
+  // Nests a list of characters under their roster owner, so a long flat list
+  // of names becomes scannable by which roster they belong to.
+  function renderOwnerGroupsHtml(chars) {
+    const byOwner = new Map();
+    for (const char of chars) {
+      if (!byOwner.has(char.person_name)) byOwner.set(char.person_name, []);
+      byOwner.get(char.person_name).push(char);
+    }
+
+    let html = '';
+    for (const [owner, ownerChars] of byOwner) {
+      const chips = ownerChars.map((c) => `<span class="raid-summary-chip">${c.char_name}</span>`).join('');
+      html += `
+        <div class="raid-summary-owner">
+          <span class="raid-summary-owner-name">${owner}</span>
+          <div class="raid-summary-names">${chips}</div>
+        </div>
+      `;
+    }
+    return html;
+  }
+
   function renderRaidSummary(raidName, mode, chars) {
     const box = document.getElementById('raid-summary');
 
@@ -303,10 +325,9 @@
     }
 
     if (mode === 'has') {
-      const chips = chars.map((char) => `<span class="raid-summary-chip">${char.char_name}</span>`).join('');
       box.innerHTML = `
         <span class="raid-summary-label">${chars.length} ${chars.length === 1 ? 'character has' : 'characters have'} cleared ${raidName}:</span>
-        <div class="raid-summary-names">${chips}</div>
+        ${renderOwnerGroupsHtml(chars)}
       `;
       return;
     }
@@ -335,7 +356,7 @@
       html += `
         <div class="raid-summary-group">
           <span class="raid-summary-tier">${tier.name}-eligible (${group.length}):</span>
-          <div class="raid-summary-names">${group.map((c) => `<span class="raid-summary-chip">${c.char_name}</span>`).join('')}</div>
+          ${renderOwnerGroupsHtml(group)}
         </div>
       `;
     }
@@ -344,7 +365,7 @@
       html += `
         <div class="raid-summary-group">
           <span class="raid-summary-tier">Not yet eligible (${notEligible.length}):</span>
-          <div class="raid-summary-names">${notEligible.map((c) => `<span class="raid-summary-chip">${c.char_name}</span>`).join('')}</div>
+          ${renderOwnerGroupsHtml(notEligible)}
         </div>
       `;
     }
@@ -635,6 +656,19 @@
     font-size: 12px;
     color: #d8a34a;
     margin-bottom: 6px;
+  }
+  .raid-summary-owner {
+    margin-top: 8px;
+  }
+  .raid-summary-label + .raid-summary-owner,
+  .raid-summary-tier + .raid-summary-owner {
+    margin-top: 0;
+  }
+  .raid-summary-owner-name {
+    display: block;
+    font-size: 12px;
+    color: #c9c9cf;
+    margin-bottom: 4px;
   }
   .raid-summary-chip {
     background: #1e1e22;
