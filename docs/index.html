@@ -133,11 +133,19 @@
 
     const badgesEl = document.createElement('div');
     badgesEl.className = 'badges';
-    for (const raidName of TRACKED_RAIDS) {
+    const remainingRaids = TRACKED_RAIDS.filter((raidName) => !raidsCleared.has(raidName));
+    if (remainingRaids.length === 0) {
       const badge = document.createElement('span');
-      badge.className = raidsCleared.has(raidName) ? 'badge badge-done' : 'badge badge-todo';
-      badge.textContent = raidName;
+      badge.className = 'badge badge-all-done';
+      badge.textContent = 'All raids cleared';
       badgesEl.appendChild(badge);
+    } else {
+      for (const raidName of remainingRaids) {
+        const badge = document.createElement('span');
+        badge.className = 'badge badge-todo';
+        badge.textContent = raidName;
+        badgesEl.appendChild(badge);
+      }
     }
     rowEl.appendChild(badgesEl);
 
@@ -589,16 +597,17 @@
     padding: 6px 10px;
     font-size: 13px;
   }
-  .badge-done::before {
-    content: '\2713';
-    color: #5dcaa5;
-  }
-  .badge-todo {
-    opacity: 0.5;
-  }
   .badge-todo::before {
     content: '\2715';
     color: #8a8a8f;
+  }
+  .badge-all-done {
+    color: #5dcaa5;
+    border-color: rgba(93, 202, 165, 0.35);
+  }
+  .badge-all-done::before {
+    content: '\2713';
+    color: #5dcaa5;
   }
 </style>
 </head>
