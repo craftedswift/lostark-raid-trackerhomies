@@ -23,12 +23,31 @@
   const VISIBLE_ROWS = 6;
 
   // Raid splash art, sourced the same way as the class icons — rotates on
-  // every load so the backdrop isn't the same raid every time.
-  const BANNER_IMAGES = ['thaemine', 'feiton', 'rimeria', 'voldis', 'skurzan', 'legion'];
+  // every load so the backdrop isn't the same raid every time. Echidna is a
+  // low-res official promo image (not full-bleed splash art like the rest),
+  // so it's weighted to show up rarely as a bit of a rare pull.
+  const BANNER_IMAGES = [
+    { file: 'thaemine.webp', weight: 1 },
+    { file: 'feiton.webp', weight: 1 },
+    { file: 'rimeria.webp', weight: 1 },
+    { file: 'voldis.webp', weight: 1 },
+    { file: 'skurzan.webp', weight: 1 },
+    { file: 'legion.webp', weight: 1 },
+    { file: 'echidna.jpg', weight: 0.08 },
+  ];
+
+  function pickWeightedBanner() {
+    const totalWeight = BANNER_IMAGES.reduce((sum, entry) => sum + entry.weight, 0);
+    let roll = Math.random() * totalWeight;
+    for (const entry of BANNER_IMAGES) {
+      roll -= entry.weight;
+      if (roll <= 0) return entry.file;
+    }
+    return BANNER_IMAGES[0].file;
+  }
 
   function setRandomBanner() {
-    const name = BANNER_IMAGES[Math.floor(Math.random() * BANNER_IMAGES.length)];
-    document.getElementById('bg-banner').src = `assets/banners/${name}.webp`;
+    document.getElementById('bg-banner').src = `assets/banners/${pickWeightedBanner()}`;
   }
   setRandomBanner();
 
