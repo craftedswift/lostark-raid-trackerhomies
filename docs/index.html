@@ -160,15 +160,29 @@
   let customRosterOrder = loadRosterOrder();
   let draggedPersonName = null;
 
+  // A roster with nothing left to track — every character has finished the
+  // gold-relevant raids — sinks to the bottom the same as a minimized one,
+  // whether or not the visitor bothered to minimize it themselves.
+  function isRosterFullyCleared(personName) {
+    const chars = cachedData.byPerson.get(personName) || [];
+    if (chars.length === 0) return false;
+    return chars.every((char) => hasFinishedGoldRaids(cachedData.clearsByCharId.get(char.id) || new Set()));
+  }
+
+  function shouldSinkToBottom(personName) {
+    return minimizedPeople.has(personName) || isRosterFullyCleared(personName);
+  }
+
   // Priority: the visitor's saved drag order, then favorites as a default for
-  // anyone not yet placed, then minimized rosters always sink to the bottom
-  // regardless of the above (a stable sort, so relative order is preserved).
+  // anyone not yet placed, then minimized/fully-cleared rosters always sink
+  // to the bottom regardless of the above (a stable sort, so relative order
+  // is preserved within each group).
   function getSortedPersonNames(allNames) {
     const ordered = customRosterOrder.filter((name) => allNames.includes(name));
     const remaining = allNames.filter((name) => !ordered.includes(name));
     remaining.sort((a, b) => Number(favoritePeople.has(b)) - Number(favoritePeople.has(a)));
     const combined = [...ordered, ...remaining];
-    return combined.sort((a, b) => Number(minimizedPeople.has(a)) - Number(minimizedPeople.has(b)));
+    return combined.sort((a, b) => Number(shouldSinkToBottom(a)) - Number(shouldSinkToBottom(b)));
   }
 
   function reorderPeople(draggedName, targetName) {
