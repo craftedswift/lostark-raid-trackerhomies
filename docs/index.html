@@ -142,11 +142,52 @@
 
   const favoritePeople = loadFavorites();
 
+  const ROSTER_ORDER_KEY = 'lostark-tracker-roster-order';
+
+  function loadRosterOrder() {
+    try {
+      const raw = localStorage.getItem(ROSTER_ORDER_KEY);
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function saveRosterOrder(order) {
+    localStorage.setItem(ROSTER_ORDER_KEY, JSON.stringify(order));
+  }
+
+  let customRosterOrder = loadRosterOrder();
+  let draggedPersonName = null;
+
+  // Priority: the visitor's saved drag order, then favorites as a default for
+  // anyone not yet placed, then minimized rosters always sink to the bottom
+  // regardless of the above (a stable sort, so relative order is preserved).
+  function getSortedPersonNames(allNames) {
+    const ordered = customRosterOrder.filter((name) => allNames.includes(name));
+    const remaining = allNames.filter((name) => !ordered.includes(name));
+    remaining.sort((a, b) => Number(favoritePeople.has(b)) - Number(favoritePeople.has(a)));
+    const combined = [...ordered, ...remaining];
+    return combined.sort((a, b) => Number(minimizedPeople.has(a)) - Number(minimizedPeople.has(b)));
+  }
+
+  function reorderPeople(draggedName, targetName) {
+    const allNames = [...cachedData.byPerson.keys()];
+    const currentOrder = getSortedPersonNames(allNames);
+    const withoutDragged = currentOrder.filter((name) => name !== draggedName);
+    const targetIndex = withoutDragged.indexOf(targetName);
+    withoutDragged.splice(targetIndex, 0, draggedName);
+    customRosterOrder = withoutDragged;
+    saveRosterOrder(customRosterOrder);
+    renderDashboard();
+  }
+
   const EYE_SVG = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
   const EYE_OFF_SVG = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a21.8 21.8 0 0 1 5.06-6.06M9.9 4.24A10.94 10.94 0 0 1 12 4c7 0 11 8 11 8a21.79 21.79 0 0 1-3.22 4.55M1 1l22 22"/><path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/></svg>';
   const CHEVRON_SVG = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>';
   const STAR_OUTLINE_SVG = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>';
   const STAR_FILLED_SVG = '<svg viewBox="0 0 24 24" width="16" height="16" fill="#d8a34a" stroke="#d8a34a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>';
+  const DRAG_HANDLE_SVG = '<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><circle cx="8" cy="6" r="1.6"/><circle cx="16" cy="6" r="1.6"/><circle cx="8" cy="12" r="1.6"/><circle cx="16" cy="12" r="1.6"/><circle cx="8" cy="18" r="1.6"/><circle cx="16" cy="18" r="1.6"/></svg>';
 
   function buildCharRow(char, raidsCleared) {
     const rowEl = document.createElement('div');
@@ -221,10 +262,38 @@
     headerEl.className = 'roster-header';
     headerEl.innerHTML = `
       <div class="roster-header-text">
+        ${showHiddenCount ? `<span class="drag-handle" draggable="true" title="Drag to reorder">${DRAG_HANDLE_SVG}</span>` : ''}
         <span>${personName}'s roster</span>
         <span class="muted">(${countsText})</span>
       </div>
     `;
+
+    if (showHiddenCount) {
+      const dragHandle = headerEl.querySelector('.drag-handle');
+      dragHandle.addEventListener('dragstart', (e) => {
+        draggedPersonName = personName;
+        e.dataTransfer.effectAllowed = 'move';
+        rosterEl.classList.add('dragging');
+      });
+      dragHandle.addEventListener('dragend', () => {
+        rosterEl.classList.remove('dragging');
+        draggedPersonName = null;
+      });
+      rosterEl.addEventListener('dragover', (e) => {
+        if (!draggedPersonName || draggedPersonName === personName) return;
+        e.preventDefault();
+        rosterEl.classList.add('drop-target');
+      });
+      rosterEl.addEventListener('dragleave', () => {
+        rosterEl.classList.remove('drop-target');
+      });
+      rosterEl.addEventListener('drop', (e) => {
+        e.preventDefault();
+        rosterEl.classList.remove('drop-target');
+        if (!draggedPersonName || draggedPersonName === personName) return;
+        reorderPeople(draggedPersonName, personName);
+      });
+    }
 
     if (showHiddenCount) {
       const actionsEl = document.createElement('div');
@@ -385,9 +454,8 @@
       return;
     }
 
-    const personEntries = [...byPerson].sort(
-      (a, b) => Number(favoritePeople.has(b[0])) - Number(favoritePeople.has(a[0]))
-    );
+    const sortedNames = getSortedPersonNames([...byPerson.keys()]);
+    const personEntries = sortedNames.map((name) => [name, byPerson.get(name)]);
 
     if (raidFilter) {
       const { raidName, mode } = raidFilter;
@@ -759,6 +827,14 @@
     overflow: hidden;
     break-inside: avoid;
     margin-bottom: 1rem;
+    transition: opacity 0.15s ease;
+  }
+  .roster.dragging {
+    opacity: 0.4;
+  }
+  .roster.drop-target {
+    outline: 2px solid #d8a34a;
+    outline-offset: -2px;
   }
   .roster-header {
     display: flex;
@@ -776,6 +852,16 @@
     align-items: center;
     gap: 8px;
     min-width: 0;
+  }
+  .drag-handle {
+    display: flex;
+    align-items: center;
+    color: #6a6a6f;
+    cursor: grab;
+    flex-shrink: 0;
+  }
+  .drag-handle:active {
+    cursor: grabbing;
   }
   .roster-header-actions {
     display: flex;
