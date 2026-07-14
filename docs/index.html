@@ -75,6 +75,15 @@
     Kazeros: 'KZ',
     Mochi: 'MO',
   };
+  // Serca's key art already fills the frame; the others have more empty
+  // background around the subject, so they need extra crop to read clearly
+  // at icon size. Tune per-raid if the source art changes.
+  const RAID_ZOOM = {
+    Serca: 1,
+    'Horizon Cathedral': 1.15,
+    Kazeros: 1.35,
+    Mochi: 1.35,
+  };
 
   window.handleRaidIconError = function (img) {
     const span = document.createElement('span');
@@ -83,14 +92,20 @@
     img.replaceWith(span);
   };
 
-  function raidIconBoxHtml(raidName, { completed = false, size = 56 } = {}) {
+  // showStatus controls the "needs doing" gold border / cleared checkmark —
+  // only meaningful for a specific character's slots, not the raid-selector
+  // buttons in the filter bar (which aren't tied to any one character).
+  function raidIconBoxHtml(raidName, { completed = false, size = 56, showStatus = true } = {}) {
     const slug = RAID_SLUGS[raidName];
     const accent = RAID_ACCENT[raidName];
     const initials = RAID_INITIALS[raidName];
+    const zoom = RAID_ZOOM[raidName] || 1;
+    const isCompleted = showStatus && completed;
+    const boxClass = 'raid-icon-box' + (!showStatus ? ' raid-icon-neutral' : '') + (isCompleted ? ' raid-icon-completed' : '');
     return `
-      <div class="raid-icon-box${completed ? ' raid-icon-completed' : ''}" style="--raid-accent:${accent};width:${size}px;height:${size}px;" title="${raidName}${completed ? ' — cleared' : ''}">
-        <img class="raid-icon-img" src="assets/${slug}.png" data-fallback-text="${initials}" alt="${raidName}" onerror="handleRaidIconError(this)" />
-        ${completed ? `<span class="raid-icon-check">${CHECK_SVG}</span>` : ''}
+      <div class="${boxClass}" style="--raid-accent:${accent};width:${size}px;height:${size}px;" title="${raidName}${isCompleted ? ' — cleared' : ''}">
+        <img class="raid-icon-img" style="--raid-zoom:${zoom}" src="assets/${slug}.png" data-fallback-text="${initials}" alt="${raidName}" onerror="handleRaidIconError(this)" />
+        ${isCompleted ? `<span class="raid-icon-check">${CHECK_SVG}</span>` : ''}
       </div>
     `;
   }
@@ -276,7 +291,7 @@
     const slotsEl = document.createElement('div');
     slotsEl.className = 'raid-slots';
     slotsEl.innerHTML = TRACKED_RAIDS.map((raidName) =>
-      raidIconBoxHtml(raidName, { completed: raidsCleared.has(raidName) })
+      raidIconBoxHtml(raidName, { completed: raidsCleared.has(raidName), size: 36 })
     ).join('');
     rowEl.appendChild(slotsEl);
 
@@ -630,7 +645,7 @@
 
         const chip = document.createElement('button');
         chip.className = 'raid-filter-btn';
-        chip.innerHTML = `${raidIconBoxHtml(raidName, { size: 88 })}<span class="label">${raidName}</span>`;
+        chip.innerHTML = `${raidIconBoxHtml(raidName, { size: 88, showStatus: false })}<span class="label">${raidName}</span>`;
 
         if (raidFilter && raidFilter.raidName === raidName) {
           chip.classList.add(raidFilter.mode === 'needs' ? 'mode-needs' : 'mode-has');
@@ -977,7 +992,12 @@
     scrollbar-width: thin;
   }
   .char-row {
-    padding: 14px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    flex-wrap: wrap;
+    padding: 12px 12px;
     border-bottom: 0.5px solid #2a2a2e;
   }
   .char-row:last-child {
@@ -986,9 +1006,9 @@
   .char-name {
     display: flex;
     align-items: center;
-    gap: 8px;
-    margin-bottom: 10px;
+    gap: 6px;
     font-size: 14px;
+    min-width: 0;
   }
   .char-name .name {
     font-weight: 500;
@@ -1023,17 +1043,25 @@
     border: 0.5px solid;
     border-radius: 999px;
     padding: 2px 9px;
-    margin-left: auto;
   }
   .raid-slots {
     display: flex;
-    gap: 8px;
+    gap: 4px;
+    flex-shrink: 0;
+    margin-left: auto;
   }
   .raid-icon-box {
     position: relative;
     border-radius: 8px;
     overflow: hidden;
     flex-shrink: 0;
+    border: 2px solid #d8a34a;
+  }
+  .raid-icon-box.raid-icon-completed {
+    border-color: #2a2a2e;
+  }
+  .raid-icon-box.raid-icon-neutral {
+    border-color: #2a2a2e;
   }
   .raid-icon-img,
   .raid-icon-fallback {
@@ -1041,6 +1069,10 @@
     height: 100%;
     display: block;
     object-fit: cover;
+  }
+  .raid-icon-img {
+    transform: scale(var(--raid-zoom, 1));
+    transform-origin: center;
   }
   .raid-icon-fallback {
     background: var(--raid-accent);
@@ -1060,10 +1092,10 @@
     position: absolute;
     bottom: -2px;
     right: -2px;
-    width: 20px;
-    height: 20px;
+    width: 18px;
+    height: 18px;
     border-radius: 50%;
-    background: #5dcaa5;
+    background: rgba(120, 120, 128, 0.9);
     border: 2px solid #0d0d0f;
     display: flex;
     align-items: center;
