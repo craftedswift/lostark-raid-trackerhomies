@@ -236,7 +236,7 @@
   function isRosterFullyCleared(personName) {
     const chars = cachedData.byPerson.get(personName) || [];
     if (chars.length === 0) return false;
-    return chars.every((char) => hasFinishedGoldRaids(cachedData.clearsByCharId.get(char.id) || new Set()));
+    return chars.every((char) => hasFinishedGoldRaids(cachedData.clearsByCharId.get(char.id) || new Map()));
   }
 
   function shouldSinkToBottom(personName) {
@@ -278,11 +278,12 @@
     const rowEl = document.createElement('div');
     rowEl.className = 'char-row';
 
+    const profileUrl = `https://lostark.bible/character/NA/${encodeURIComponent(char.char_name)}`;
     const nameEl = document.createElement('div');
     nameEl.className = 'char-name';
     nameEl.innerHTML = `
       ${classIconHtml(char.class_name)}
-      <span class="name">${char.char_name}</span>
+      <a class="name" href="${profileUrl}" target="_blank" rel="noopener" title="View on lostark.bible">${char.char_name}</a>
       <span class="ilvl">${char.item_level != null ? char.item_level.toFixed(2) : '?'}</span>
       ${completionRatioHtml(raidsCleared)}
     `;
@@ -290,9 +291,12 @@
 
     const slotsEl = document.createElement('div');
     slotsEl.className = 'raid-slots';
-    slotsEl.innerHTML = TRACKED_RAIDS.map((raidName) =>
-      raidIconBoxHtml(raidName, { completed: raidsCleared.has(raidName), size: 36 })
-    ).join('');
+    slotsEl.innerHTML = TRACKED_RAIDS.map((raidName) => {
+      const percentile = raidsCleared.get(raidName);
+      const box = raidIconBoxHtml(raidName, { completed: raidsCleared.has(raidName), size: 36 });
+      const caption = percentile != null ? `<span class="raid-slot-percentile">${Math.round(percentile * 100)}%</span>` : '';
+      return `<div class="raid-slot">${box}${caption}</div>`;
+    }).join('');
     rowEl.appendChild(slotsEl);
 
     return rowEl;
@@ -314,7 +318,7 @@
     if (showHiddenCount) {
       let hiddenCount = 0;
       for (const char of chars) {
-        const raidsCleared = clearsByCharId.get(char.id) || new Set();
+        const raidsCleared = clearsByCharId.get(char.id) || new Map();
         if (isCompletionHidden(raidsCleared)) hiddenCount++;
       }
       if (hiddenCount > 0) countsText += `, ${hiddenCount} hidden`;
@@ -402,7 +406,7 @@
     bodyEl.className = 'roster-body';
 
     for (const char of visibleChars) {
-      const raidsCleared = clearsByCharId.get(char.id) || new Set();
+      const raidsCleared = clearsByCharId.get(char.id) || new Map();
       bodyEl.appendChild(buildCharRow(char, raidsCleared));
     }
 
@@ -527,7 +531,7 @@
 
       for (const [personName, chars] of personEntries) {
         const matchingChars = chars.filter((char) => {
-          const cleared = clearsByCharId.get(char.id) || new Set();
+          const cleared = clearsByCharId.get(char.id) || new Map();
           const hasRaid = cleared.has(raidName);
           return mode === 'needs' ? !hasRaid : hasRaid;
         });
@@ -556,7 +560,7 @@
       const personMatches = !term || personName.toLowerCase().includes(term);
 
       if (personMatches) {
-        const visibleChars = chars.filter((char) => !isCompletionHidden(clearsByCharId.get(char.id) || new Set()));
+        const visibleChars = chars.filter((char) => !isCompletionHidden(clearsByCharId.get(char.id) || new Map()));
         renderedAnything = true;
         renderRosterCard(root, personName, chars, visibleChars, clearsByCharId, { showHiddenCount: true });
         continue;
@@ -592,7 +596,7 @@
 
     const [{ data: characters, error: charErr }, { data: clears, error: clearErr }] = await Promise.all([
       supabase.from('characters').select('id, person_name, char_name, class_name, item_level').eq('resolve_status', 'ok'),
-      supabase.from('clears').select('character_id, raid_name').eq('week_start', weekStartDate),
+      supabase.from('clears').select('character_id, raid_name, percentile').eq('week_start', weekStartDate),
     ]);
 
     if (charErr || clearErr) {
@@ -600,10 +604,13 @@
       return;
     }
 
+    // Map<charId, Map<raidName, percentile>> — a Map works as a drop-in for
+    // the Set this used to be everywhere else in the file (.has() behaves
+    // the same), while also letting the tooltip look up the percentile.
     const clearsByCharId = new Map();
     for (const clear of clears) {
-      if (!clearsByCharId.has(clear.character_id)) clearsByCharId.set(clear.character_id, new Set());
-      clearsByCharId.get(clear.character_id).add(clear.raid_name);
+      if (!clearsByCharId.has(clear.character_id)) clearsByCharId.set(clear.character_id, new Map());
+      clearsByCharId.get(clear.character_id).set(clear.raid_name, clear.percentile);
     }
 
     const byPerson = new Map();
@@ -900,18 +907,26 @@
   .error {
     color: #e07a7a;
   }
+  /* Row-major CSS Grid instead of newspaper-style column-count masonry —
+     column-count fills column 1 completely top-to-bottom before starting
+     column 2, so a card's DOM position doesn't match its left-to-right
+     visual neighbors, which made cross-column drag-reordering feel random.
+     align-items: start keeps each card its own natural height instead of
+     stretching to match the tallest card in its row. */
   #root {
-    column-count: 3;
-    column-gap: 1rem;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+    align-items: start;
   }
   @media (max-width: 1100px) {
     #root {
-      column-count: 2;
+      grid-template-columns: repeat(2, 1fr);
     }
   }
   @media (max-width: 700px) {
     #root {
-      column-count: 1;
+      grid-template-columns: 1fr;
     }
   }
   .roster {
@@ -919,8 +934,6 @@
     border-top: 2px solid rgba(216, 163, 74, 0.35);
     border-radius: 12px;
     overflow: hidden;
-    break-inside: avoid;
-    margin-bottom: 1rem;
     transition: opacity 0.15s ease;
   }
   .roster.dragging {
@@ -1012,6 +1025,11 @@
   }
   .char-name .name {
     font-weight: 500;
+    color: inherit;
+    text-decoration: none;
+  }
+  .char-name .name:hover {
+    text-decoration: underline;
   }
   .ilvl {
     font-size: 13px;
@@ -1049,6 +1067,17 @@
     gap: 4px;
     flex-shrink: 0;
     margin-left: auto;
+  }
+  .raid-slot {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+  }
+  .raid-slot-percentile {
+    font-size: 9px;
+    line-height: 1;
+    color: #8a8a8f;
   }
   .raid-icon-box {
     position: relative;
