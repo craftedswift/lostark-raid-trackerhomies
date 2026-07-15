@@ -13,6 +13,10 @@
 
   const SUPABASE_URL = 'https://rbgehebmevjiwhoupmib.supabase.co';
   const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJiZ2VoZWJtZXZqaXdob3VwbWliIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMxMTM0NDcsImV4cCI6MjA5ODY4OTQ0N30.BRP1hyhLlL-7B59g-ODyeOQ2Xtq2TTtI0PJg6ZXQeBE';
+  // Paste your deployed FriendsPage.gs Web App URL here (Apps Script editor
+  // -> Deploy -> Manage deployments -> copy the "Web app" URL). Leave the
+  // placeholder in place to hide the "Run scrape now" button entirely.
+  const FRIENDS_PAGE_URL = 'https://script.google.com/macros/s/AKfycbzEywQrFFKw3BtyDe2RoSqQAFB91xauV4kBRxXlHoWat0qCbJwurRDUdUlY4DOmgiYZjw/exec';
 
   // Keep in sync with src/raidMapping.js on the backend.
   const TRACKED_RAIDS = ['Serca', 'Horizon Cathedral', 'Kazeros', 'Mochi'];
@@ -746,8 +750,47 @@
     });
   }
 
+  // Hits FriendsPage.gs's triggerScrape action (password + server-side
+  // cooldown enforced there) instead of waiting for the next hourly trigger.
+  // Hidden entirely if FRIENDS_PAGE_URL was never filled in.
+  //
+  // Apps Script Web Apps don't send CORS headers, so a normal cross-origin
+  // fetch() can't read the response at all (confirmed: even a plain GET to
+  // an already-working deployment throws "Failed to fetch" from this origin)
+  // — mode: 'no-cors' still fires the request server-side, just with an
+  // opaque response, so this is intentionally fire-and-forget: no way to
+  // surface a wrong-password or cooldown error back to the button.
+  function setupScrapeButton() {
+    const btn = document.getElementById('scrape-now-btn');
+    if (FRIENDS_PAGE_URL.startsWith('PASTE_')) {
+      btn.style.display = 'none';
+      return;
+    }
+
+    btn.addEventListener('click', async () => {
+      const password = prompt('Enter the shared password to run a scrape:');
+      if (!password) return;
+
+      btn.disabled = true;
+      const originalText = btn.textContent;
+      btn.textContent = 'Triggered…';
+
+      try {
+        const url = `${FRIENDS_PAGE_URL}?action=triggerScrape&password=${encodeURIComponent(password)}`;
+        await fetch(url, { mode: 'no-cors' });
+        alert('Scrape triggered (if the password was correct and it\'s not on cooldown). It can take a minute or two — refresh the page after that to see updated data.');
+      } catch (err) {
+        alert('Request failed: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = originalText;
+      }
+    });
+  }
+
   main();
   setupControls();
+  setupScrapeButton();
 </script>
 <style>
   :root {
@@ -808,6 +851,22 @@
     display: flex;
     align-items: center;
     gap: 16px;
+  }
+  .scrape-now-btn {
+    background: #17171a;
+    color: #c9c9cf;
+    border: 0.5px solid #2a2a2e;
+    border-radius: 8px;
+    padding: 6px 12px;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .scrape-now-btn:hover:not(:disabled) {
+    background: #1e1e22;
+  }
+  .scrape-now-btn:disabled {
+    opacity: 0.6;
+    cursor: default;
   }
   #week-label {
     background: #17171a;
@@ -1212,6 +1271,7 @@
       <div class="page-header">
         <h1>Raid clear tracker</h1>
         <div class="page-header-controls">
+          <button id="scrape-now-btn" class="scrape-now-btn">Run scrape now</button>
           <span id="week-label" class="muted"></span>
         </div>
       </div>
