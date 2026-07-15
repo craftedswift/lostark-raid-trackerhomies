@@ -750,16 +750,14 @@
     });
   }
 
-  // Hits FriendsPage.gs's triggerScrape action (password + server-side
-  // cooldown enforced there) instead of waiting for the next hourly trigger.
-  // Hidden entirely if FRIENDS_PAGE_URL was never filled in.
-  //
-  // Apps Script Web Apps don't send CORS headers, so a normal cross-origin
-  // fetch() can't read the response at all (confirmed: even a plain GET to
-  // an already-working deployment throws "Failed to fetch" from this origin)
-  // — mode: 'no-cors' still fires the request server-side, just with an
-  // opaque response, so this is intentionally fire-and-forget: no way to
-  // surface a wrong-password or cooldown error back to the button.
+  // Apps Script Web Apps send no CORS headers, so a cross-origin fetch()
+  // from this page can't read a response at all (confirmed: even a plain
+  // GET to a working deployment throws "Failed to fetch" from this origin).
+  // The actual "run scrape now" button — with a real password prompt and
+  // success/error feedback via google.script.run — lives on the
+  // FriendsPage.gs page itself, since that only works same-origin. This
+  // button just opens that page. Hidden entirely if FRIENDS_PAGE_URL was
+  // never filled in.
   function setupScrapeButton() {
     const btn = document.getElementById('scrape-now-btn');
     if (FRIENDS_PAGE_URL.startsWith('PASTE_')) {
@@ -767,24 +765,8 @@
       return;
     }
 
-    btn.addEventListener('click', async () => {
-      const password = prompt('Enter the shared password to run a scrape:');
-      if (!password) return;
-
-      btn.disabled = true;
-      const originalText = btn.textContent;
-      btn.textContent = 'Triggered…';
-
-      try {
-        const url = `${FRIENDS_PAGE_URL}?action=triggerScrape&password=${encodeURIComponent(password)}`;
-        await fetch(url, { mode: 'no-cors' });
-        alert('Scrape triggered (if the password was correct and it\'s not on cooldown). It can take a minute or two — refresh the page after that to see updated data.');
-      } catch (err) {
-        alert('Request failed: ' + err.message);
-      } finally {
-        btn.disabled = false;
-        btn.textContent = originalText;
-      }
+    btn.addEventListener('click', () => {
+      window.open(FRIENDS_PAGE_URL, '_blank', 'noopener');
     });
   }
 
