@@ -164,33 +164,61 @@
     { file: 'voldis.webp', weight: 1 },
   ];
 
+  // YouTube banners aren't local files, so sync-banners.mjs can't discover
+  // them — add entries by hand as full YouTube URLs (any common format:
+  // watch?v=, youtu.be/, embed/, shorts/).
+  const YOUTUBE_BANNERS = [
+    // { url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', weight: 1 },
+  ];
+
+  function extractYouTubeId(url) {
+    const match = url.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|shorts\/))([a-zA-Z0-9_-]{11})/);
+    return match ? match[1] : null;
+  }
+
   function pickWeightedBanner() {
-    const totalWeight = BANNER_IMAGES.reduce((sum, entry) => sum + entry.weight, 0);
+    const pool = [
+      ...BANNER_IMAGES.map((entry) => ({ kind: 'file', file: entry.file, weight: entry.weight })),
+      ...YOUTUBE_BANNERS.map((entry) => ({ kind: 'youtube', id: extractYouTubeId(entry.url), weight: entry.weight })).filter(
+        (entry) => entry.id
+      ),
+    ];
+    const totalWeight = pool.reduce((sum, entry) => sum + entry.weight, 0);
     let roll = Math.random() * totalWeight;
-    for (const entry of BANNER_IMAGES) {
+    for (const entry of pool) {
       roll -= entry.weight;
-      if (roll <= 0) return entry.file;
+      if (roll <= 0) return entry;
     }
-    return BANNER_IMAGES[0].file;
+    return pool[0];
   }
 
   const VIDEO_EXTENSIONS = new Set(['.mp4', '.webm', '.mov']);
 
   function setRandomBanner() {
-    const file = pickWeightedBanner();
-    const isVideo = VIDEO_EXTENSIONS.has(file.slice(file.lastIndexOf('.')).toLowerCase());
+    const picked = pickWeightedBanner();
     const imgEl = document.getElementById('bg-banner');
     const videoEl = document.getElementById('bg-banner-video');
+    const youtubeEl = document.getElementById('bg-banner-youtube');
 
+    imgEl.style.display = 'none';
+    videoEl.style.display = 'none';
+    videoEl.removeAttribute('src');
+    youtubeEl.style.display = 'none';
+    youtubeEl.src = '';
+
+    if (picked.kind === 'youtube') {
+      youtubeEl.style.display = 'block';
+      youtubeEl.src = `https://www.youtube.com/embed/${picked.id}?autoplay=1&mute=1&loop=1&playlist=${picked.id}&controls=0&modestbranding=1&playsinline=1&rel=0&iv_load_policy=3`;
+      return;
+    }
+
+    const isVideo = VIDEO_EXTENSIONS.has(picked.file.slice(picked.file.lastIndexOf('.')).toLowerCase());
     if (isVideo) {
-      imgEl.style.display = 'none';
       videoEl.style.display = 'block';
-      videoEl.src = `assets/banners/${file}`;
+      videoEl.src = `assets/banners/${picked.file}`;
     } else {
-      videoEl.style.display = 'none';
-      videoEl.removeAttribute('src');
       imgEl.style.display = 'block';
-      imgEl.src = `assets/banners/${file}`;
+      imgEl.src = `assets/banners/${picked.file}`;
     }
   }
   setRandomBanner();
@@ -824,6 +852,21 @@
     object-fit: cover;
     z-index: -2;
   }
+  /* iframes don't support object-fit — oversize a fixed 16:9 box and
+     recenter it so it always covers the viewport regardless of aspect
+     ratio, the standard trick for a YouTube embed used as a background. */
+  #bg-banner-youtube {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    width: 100vw;
+    height: 56.25vw;
+    min-height: 100vh;
+    min-width: 177.78vh;
+    transform: translate(-50%, -50%);
+    z-index: -2;
+    pointer-events: none;
+  }
   #bg-overlay {
     position: fixed;
     top: 0;
@@ -1274,6 +1317,7 @@
 <body>
   <img id="bg-banner" alt="" />
   <video id="bg-banner-video" autoplay muted loop playsinline style="display: none"></video>
+  <iframe id="bg-banner-youtube" style="display: none" frameborder="0" allow="autoplay; encrypted-media" tabindex="-1"></iframe>
   <div id="bg-overlay"></div>
 
   <div class="hero">
