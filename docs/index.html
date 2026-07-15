@@ -124,18 +124,33 @@
     return `<span class="completion-badge" style="color:${text};background:${bg};border-color:${border}">${doneCount}/${GOLD_RAIDS.length}</span>`;
   }
 
+  // Same grey/green/blue/purple/orange brackets lostark.bible itself uses
+  // for its percentile badges (standard combat-log-parse convention).
+  const PERCENTILE_COLOR_BRACKETS = [
+    { min: 95, color: '#e8a13c' },
+    { min: 75, color: '#b06fe0' },
+    { min: 50, color: '#4a90d8' },
+    { min: 25, color: '#5dcaa5' },
+    { min: 0, color: '#9a9aa0' },
+  ];
+
+  function getPercentileColor(pct) {
+    return PERCENTILE_COLOR_BRACKETS.find((bracket) => pct >= bracket.min).color;
+  }
+
   // Raid splash art, sourced the same way as the class icons — rotates on
   // every load so the backdrop isn't the same raid every time. Echidna is a
   // low-res official promo image (not full-bleed splash art like the rest),
   // so it's weighted to show up rarely as a bit of a rare pull.
   const BANNER_IMAGES = [
-    { file: 'thaemine.webp', weight: 1 },
-    { file: 'feiton.webp', weight: 1 },
-    { file: 'rimeria.webp', weight: 1 },
-    { file: 'voldis.webp', weight: 1 },
-    { file: 'skurzan.webp', weight: 1 },
-    { file: 'legion.webp', weight: 1 },
+    { file: 'ducks.jpg', weight: 1 },
     { file: 'echidna.jpg', weight: 0.08 },
+    { file: 'feiton.webp', weight: 1 },
+    { file: 'legion.webp', weight: 1 },
+    { file: 'rimeria.webp', weight: 1 },
+    { file: 'skurzan.webp', weight: 1 },
+    { file: 'thaemine.webp', weight: 1 },
+    { file: 'voldis.webp', weight: 1 },
   ];
 
   function pickWeightedBanner() {
@@ -294,7 +309,11 @@
     slotsEl.innerHTML = TRACKED_RAIDS.map((raidName) => {
       const percentile = raidsCleared.get(raidName);
       const box = raidIconBoxHtml(raidName, { completed: raidsCleared.has(raidName), size: 36 });
-      const caption = percentile != null ? `<span class="raid-slot-percentile">${Math.round(percentile * 100)}%</span>` : '';
+      let caption = '';
+      if (percentile != null) {
+        const pct = Math.round(percentile * 100);
+        caption = `<span class="raid-slot-percentile" style="color:${getPercentileColor(pct)}">${pct}%</span>`;
+      }
       return `<div class="raid-slot">${box}${caption}</div>`;
     }).join('');
     rowEl.appendChild(slotsEl);
