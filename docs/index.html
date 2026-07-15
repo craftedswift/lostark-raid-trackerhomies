@@ -143,12 +143,17 @@
   }
 
   // Raid splash art, sourced the same way as the class icons — rotates on
-  // every load so the backdrop isn't the same raid every time. Echidna is a
-  // low-res official promo image (not full-bleed splash art like the rest),
-  // so it's weighted to show up rarely as a bit of a rare pull.
+  // every load so the backdrop isn't the same raid every time. Equal weight
+  // for everything except a deliberately rare "1percent" pull — regenerate
+  // this array with scripts/sync-banners.mjs after adding new art rather
+  // than hand-editing it.
   const BANNER_IMAGES = [
+    { file: '1percent.png', weight: 0.01 },
+    { file: '658ff1e28f19415eb9f6757d91cbc11b.jpeg', weight: 1 },
+    { file: 'c76b3a14ea3741f0a4ce98ac3b4a631b.jpg', weight: 1 },
     { file: 'ducks.jpg', weight: 1 },
-    { file: 'echidna.jpg', weight: 0.08 },
+    { file: 'echidna.jpg', weight: 1 },
+    { file: 'f89070936a74415f9887a9a12f9b9d1c.jpg', weight: 1 },
     { file: 'feiton.webp', weight: 1 },
     { file: 'legion.webp', weight: 1 },
     { file: 'rimeria.webp', weight: 1 },

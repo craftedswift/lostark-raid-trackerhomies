@@ -12,9 +12,10 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.join(__dirname, '..');
 const bannersDir = path.join(repoRoot, 'assets', 'banners');
 
-const WEIGHT_OVERRIDES = {
-  'echidna.jpg': 0.08,
-};
+// Any file whose basename (no extension) is "1percent" is a deliberately
+// rare pull — everything else gets equal weight.
+const RARE_BASENAME = '1percent';
+const RARE_WEIGHT = 0.01;
 
 const IMAGE_EXTENSIONS = new Set(['.webp', '.jpg', '.jpeg', '.png']);
 
@@ -24,7 +25,8 @@ function buildBannerImagesBlock() {
     .sort();
 
   const lines = files.map((file) => {
-    const weight = WEIGHT_OVERRIDES[file] ?? 1;
+    const basename = path.parse(file).name.toLowerCase();
+    const weight = basename === RARE_BASENAME ? RARE_WEIGHT : 1;
     return `    { file: '${file}', weight: ${weight} },`;
   });
 
