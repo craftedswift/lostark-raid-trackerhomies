@@ -15,7 +15,7 @@
   const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJiZ2VoZWJtZXZqaXdob3VwbWliIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMxMTM0NDcsImV4cCI6MjA5ODY4OTQ0N30.BRP1hyhLlL-7B59g-ODyeOQ2Xtq2TTtI0PJg6ZXQeBE';
   // Paste your deployed FriendsPage.gs Web App URL here (Apps Script editor
   // -> Deploy -> Manage deployments -> copy the "Web app" URL). Leave the
-  // placeholder in place to hide the "Run scrape now" button entirely.
+  // placeholder in place to hide the embedded scrape widget entirely.
   const FRIENDS_PAGE_URL = 'https://script.google.com/macros/s/AKfycbzEywQrFFKw3BtyDe2RoSqQAFB91xauV4kBRxXlHoWat0qCbJwurRDUdUlY4DOmgiYZjw/exec';
 
   // Keep in sync with src/raidMapping.js on the backend.
@@ -753,26 +753,23 @@
   // Apps Script Web Apps send no CORS headers, so a cross-origin fetch()
   // from this page can't read a response at all (confirmed: even a plain
   // GET to a working deployment throws "Failed to fetch" from this origin).
-  // The actual "run scrape now" button — with a real password prompt and
-  // success/error feedback via google.script.run — lives on the
-  // FriendsPage.gs page itself, since that only works same-origin. This
-  // button just opens that page. Hidden entirely if FRIENDS_PAGE_URL was
-  // never filled in.
-  function setupScrapeButton() {
-    const btn = document.getElementById('scrape-now-btn');
+  // Embedding FriendsPage.gs's ?view=scrape widget in an <iframe> sidesteps
+  // that entirely — the widget's own google.script.run calls run same-origin
+  // to itself regardless of how it's nested, so friends get a real password
+  // field + button + feedback without leaving this page or opening a tab.
+  // Hidden entirely if FRIENDS_PAGE_URL was never filled in.
+  function setupScrapeWidget() {
+    const frame = document.getElementById('scrape-widget');
     if (FRIENDS_PAGE_URL.startsWith('PASTE_')) {
-      btn.style.display = 'none';
+      frame.style.display = 'none';
       return;
     }
-
-    btn.addEventListener('click', () => {
-      window.open(FRIENDS_PAGE_URL, '_blank', 'noopener');
-    });
+    frame.src = `${FRIENDS_PAGE_URL}?view=scrape`;
   }
 
   main();
   setupControls();
-  setupScrapeButton();
+  setupScrapeWidget();
 </script>
 <style>
   :root {
@@ -834,21 +831,10 @@
     align-items: center;
     gap: 16px;
   }
-  .scrape-now-btn {
-    background: #17171a;
-    color: #c9c9cf;
-    border: 0.5px solid #2a2a2e;
-    border-radius: 8px;
-    padding: 6px 12px;
-    font-size: 13px;
-    cursor: pointer;
-  }
-  .scrape-now-btn:hover:not(:disabled) {
-    background: #1e1e22;
-  }
-  .scrape-now-btn:disabled {
-    opacity: 0.6;
-    cursor: default;
+  #scrape-widget {
+    border: none;
+    width: 260px;
+    height: 34px;
   }
   #week-label {
     background: #17171a;
@@ -1253,7 +1239,7 @@
       <div class="page-header">
         <h1>Raid clear tracker</h1>
         <div class="page-header-controls">
-          <button id="scrape-now-btn" class="scrape-now-btn">Run scrape now</button>
+          <iframe id="scrape-widget" title="Run scrape"></iframe>
           <span id="week-label" class="muted"></span>
         </div>
       </div>
