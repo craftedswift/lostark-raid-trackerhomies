@@ -204,10 +204,19 @@
     return `<img class="avatar avatar-icon" src="assets/classes/${safeName}.svg" data-fallback-src="assets/classes/${safeName}.png" data-fallback-text="${fallback}" alt="${safeName}" onerror="handleIconError(this)" />`;
   }
 
+  // Lost Ark's 3 support classes — everything else is a DPS.
+  const SUPPORT_CLASSES = new Set(['Bard', 'Paladin', 'Artist']);
+
+  function getRole(className) {
+    if (!className) return null;
+    return SUPPORT_CLASSES.has(className) ? 'support' : 'dps';
+  }
+
   let cachedData = null;
   let hideCompleted = true;
   let searchTerm = '';
   let raidFilter = null; // { raidName, mode: 'needs' | 'has' } or null
+  let roleFilter = null; // 'support' | 'dps' | null
   const minimizedPeople = new Set();
 
   const FAVORITES_KEY = 'lostark-tracker-favorites';
@@ -541,7 +550,9 @@
     }
 
     const sortedNames = getSortedPersonNames([...byPerson.keys()]);
-    const personEntries = sortedNames.map((name) => [name, byPerson.get(name)]);
+    const personEntries = sortedNames
+      .map((name) => [name, roleFilter ? byPerson.get(name).filter((char) => getRole(char.class_name) === roleFilter) : byPerson.get(name)])
+      .filter(([, chars]) => chars.length > 0);
 
     if (raidFilter) {
       const { raidName, mode } = raidFilter;
@@ -711,6 +722,26 @@
         raidFilter = null;
         renderRaidChips();
       }
+      renderDashboard();
+    });
+
+    const supportBtn = document.getElementById('role-support-btn');
+    const dpsBtn = document.getElementById('role-dps-btn');
+
+    function updateRoleButtons() {
+      supportBtn.classList.toggle('active', roleFilter === 'support');
+      dpsBtn.classList.toggle('active', roleFilter === 'dps');
+    }
+
+    supportBtn.addEventListener('click', () => {
+      roleFilter = roleFilter === 'support' ? null : 'support';
+      updateRoleButtons();
+      renderDashboard();
+    });
+
+    dpsBtn.addEventListener('click', () => {
+      roleFilter = roleFilter === 'dps' ? null : 'dps';
+      updateRoleButtons();
       renderDashboard();
     });
   }
@@ -918,6 +949,25 @@
   }
   .toggle-btn:hover {
     background: #1e1e22;
+  }
+  .role-filter-btn {
+    background: #17171a;
+    color: #c9c9cf;
+    border: 0.5px solid #2a2a2e;
+    border-radius: 8px;
+    padding: 0 16px;
+    height: 38px;
+    font-size: 13px;
+    flex-shrink: 0;
+    cursor: pointer;
+  }
+  .role-filter-btn:hover {
+    background: #1e1e22;
+  }
+  .role-filter-btn.active {
+    background: #1e2a3a;
+    border-color: #7fb2e8;
+    color: #7fb2e8;
   }
   .muted {
     color: #8a8a8f;
@@ -1172,6 +1222,8 @@
     <div class="toolbar">
       <input id="search-input" type="text" placeholder="Search a roster or character..." />
       <button id="hide-toggle" class="toggle-btn"></button>
+      <button id="role-support-btn" class="role-filter-btn">Support</button>
+      <button id="role-dps-btn" class="role-filter-btn">DPS</button>
     </div>
 
     <div id="raid-filter-bar" class="raid-filter-bar"></div>
