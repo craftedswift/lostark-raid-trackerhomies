@@ -828,9 +828,26 @@
     });
   }
 
+  // Same page-can't-be-embedded/called-cross-origin situation as the scrape
+  // button above — opens FriendsPage.gs's full password-gated page (per-raid
+  // checkboxes for every character) in a new tab, rather than the
+  // scrape-only ?view=scrape widget.
+  function setupManualClearsButton() {
+    const btn = document.getElementById('manual-clears-btn');
+    if (FRIENDS_PAGE_URL.startsWith('PASTE_')) {
+      btn.style.display = 'none';
+      return;
+    }
+
+    btn.addEventListener('click', () => {
+      window.open(FRIENDS_PAGE_URL, '_blank', 'noopener');
+    });
+  }
+
   main();
   setupControls();
   setupScrapeButton();
+  setupManualClearsButton();
 </script>
 <style>
   :root {
@@ -1326,6 +1343,7 @@
         <h1>Raid clear tracker</h1>
         <div class="page-header-controls">
           <button id="scrape-now-btn" class="scrape-now-btn">Run scrape now</button>
+          <button id="manual-clears-btn" class="scrape-now-btn">Manual clears</button>
           <span id="week-label" class="muted"></span>
         </div>
       </div>
