@@ -291,7 +291,14 @@
     withoutDragged.splice(targetIndex, 0, draggedName);
     customRosterOrder = withoutDragged;
     saveRosterOrder(customRosterOrder);
+
+    // renderDashboard() clears #root and rebuilds it — while briefly empty
+    // the browser clamps window scroll to fit the shorter content, and
+    // nothing restores it afterward, so a drag-reorder jumps the page to
+    // the top. Save/restore across the rebuild to keep it in place.
+    const scrollY = window.scrollY;
     renderDashboard();
+    window.scrollTo(0, scrollY);
   }
 
   const EYE_SVG = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
