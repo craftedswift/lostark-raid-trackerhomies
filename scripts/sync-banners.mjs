@@ -1,8 +1,8 @@
 // Regenerates the BANNER_IMAGES array in index.html (and docs/index.html, if
-// present) from whatever image files actually exist in assets/banners/ — so
-// adding new art means dropping the file in and re-running this, not
-// hand-editing the array. Weight overrides (e.g. a deliberately rare pull)
-// live in WEIGHT_OVERRIDES below; anything else defaults to weight 1.
+// present) from whatever image/video files actually exist in
+// assets/banners/ — so adding new art means dropping the file in and
+// re-running this, not hand-editing the array. index.html picks between
+// <img> and <video> at runtime based on file extension.
 import { readdirSync } from 'fs';
 import { readFileSync, writeFileSync } from 'fs';
 import path from 'path';
@@ -17,11 +17,11 @@ const bannersDir = path.join(repoRoot, 'assets', 'banners');
 const RARE_BASENAME = '1percent';
 const RARE_WEIGHT = 0.01;
 
-const IMAGE_EXTENSIONS = new Set(['.webp', '.jpg', '.jpeg', '.png']);
+const MEDIA_EXTENSIONS = new Set(['.webp', '.jpg', '.jpeg', '.png', '.mp4', '.webm', '.mov']);
 
 function buildBannerImagesBlock() {
   const files = readdirSync(bannersDir)
-    .filter((file) => IMAGE_EXTENSIONS.has(path.extname(file).toLowerCase()))
+    .filter((file) => MEDIA_EXTENSIONS.has(path.extname(file).toLowerCase()))
     .sort();
 
   const lines = files.map((file) => {

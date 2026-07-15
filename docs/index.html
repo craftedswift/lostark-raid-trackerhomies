@@ -156,6 +156,8 @@
     { file: 'f89070936a74415f9887a9a12f9b9d1c.jpg', weight: 1 },
     { file: 'feiton.webp', weight: 1 },
     { file: 'legion.webp', weight: 1 },
+    { file: 'mokoko10.jpg', weight: 1 },
+    { file: 'mokokoeep10.png', weight: 1 },
     { file: 'rimeria.webp', weight: 1 },
     { file: 'skurzan.webp', weight: 1 },
     { file: 'thaemine.webp', weight: 1 },
@@ -172,8 +174,24 @@
     return BANNER_IMAGES[0].file;
   }
 
+  const VIDEO_EXTENSIONS = new Set(['.mp4', '.webm', '.mov']);
+
   function setRandomBanner() {
-    document.getElementById('bg-banner').src = `assets/banners/${pickWeightedBanner()}`;
+    const file = pickWeightedBanner();
+    const isVideo = VIDEO_EXTENSIONS.has(file.slice(file.lastIndexOf('.')).toLowerCase());
+    const imgEl = document.getElementById('bg-banner');
+    const videoEl = document.getElementById('bg-banner-video');
+
+    if (isVideo) {
+      imgEl.style.display = 'none';
+      videoEl.style.display = 'block';
+      videoEl.src = `assets/banners/${file}`;
+    } else {
+      videoEl.style.display = 'none';
+      videoEl.removeAttribute('src');
+      imgEl.style.display = 'block';
+      imgEl.src = `assets/banners/${file}`;
+    }
   }
   setRandomBanner();
 
@@ -796,7 +814,8 @@
     color: #e8e8ea;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   }
-  #bg-banner {
+  #bg-banner,
+  #bg-banner-video {
     position: fixed;
     top: 0;
     left: 0;
@@ -1254,6 +1273,7 @@
 </head>
 <body>
   <img id="bg-banner" alt="" />
+  <video id="bg-banner-video" autoplay muted loop playsinline style="display: none"></video>
   <div id="bg-overlay"></div>
 
   <div class="hero">
